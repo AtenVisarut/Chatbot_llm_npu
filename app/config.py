@@ -29,20 +29,8 @@ class Settings(BaseSettings):
         description="Google Gemini API Key for vision analysis"
     )
     gemini_model: str = Field(
-        default="gemini-2.0-flash-exp",
+        default="gemini-2.5-flash-exp",
         description="Gemini model to use for analysis"
-    )
-
-    # Redis Configuration
-    redis_url: str = Field(
-        default="redis://localhost:6379/0",
-        description="Redis connection URL"
-    )
-
-    # Database Configuration
-    database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/plant_disease",
-        description="PostgreSQL connection URL"
     )
 
     # Application Configuration
@@ -73,14 +61,10 @@ class Settings(BaseSettings):
         description="JPEG/WebP compression quality (1-100)"
     )
 
-    # Cache Configuration
-    cache_expiry_hours: int = Field(
-        default=24,
-        description="Cache expiry time in hours for diagnosis results"
-    )
+    # Session Configuration
     user_state_expiry_hours: int = Field(
         default=1,
-        description="User state expiry time in hours"
+        description="User session state expiry time in hours"
     )
 
     # Rate Limiting Configuration

@@ -1,215 +1,82 @@
-# Plant Disease Detection Chatbot
+# 🌾 Plant Disease AI - LINE Chatbot
 
-LINE Chatbot ระบบวินิจฉัยโรคพืชด้วย AI Vision โดยใช้ Gemini 2.0 Flash สำหรับวิเคราะห์ภาพ
+ระบบ AI วินิจฉัยโรคพืชอัตโนมัติผ่าน LINE โดยใช้ **Google Gemini 2.0 Flash** วิเคราะห์ภาพถ่ายเพื่อระบุโรคและแนวทางการรักษาที่แม่นยำ
 
-## Features
+> [!NOTE]
+> ระบบนี้ถูกออกแบบมาให้ทำงานแบบ **Stateless** สมบูรณ์แบบ (ไม่ใช้ Database/Redis) เหมาะสำหรับการ Deployment บน **Vercel**
 
-- รับภาพพืชจากผู้ใช้ผ่าน LINE
-- ส่ง Flex Message ขอข้อมูลเพิ่มเติม (ชนิดพืช, ภูมิภาค)
-- วิเคราะห์โรคด้วย Gemini 2.0 Flash Vision API
-- ส่งผลวิเคราะห์กลับเป็น Flex Message พร้อมคำแนะนำการรักษา
-- รองรับพืชหลายชนิด: ข้าว, ข้าวโพด, มันสำปะหลัง, อ้อย และอื่นๆ
+---
 
-## Tech Stack
+## ✨ คุณสมบัติเด่น
+- 📸 **AI Vision Analysis**: ระบุโรคพืชจากรูปถ่ายด้วยเทคโนโลยี Gemini ล่าสุด
+- 💬 **Interactive Flow**: ระบบสอบถามข้อมูลเพิ่มเติมผ่าน Flex Message (ชนิดพืช, ภูมิภาค) เพื่อความแม่นยำ
+- 🍱 **Rich Response**: รายงานผลการวินิจฉัยสวยงาม พร้อมคำแนะนำการจัดการทั้งแบบเคมีและอินทรีย์
+- ⚡ **Ultra Fast & Scalable**: ทำงานบน Serverless Architecture (Vercel) เริ่มต้นใช้งานได้ฟรี
 
-- **Backend**: FastAPI (Python 3.11+)
-- **AI Vision**: Google Gemini 2.0 Flash
-- **Cache**: Redis
-- **Database**: PostgreSQL
-- **Image Processing**: Pillow + OpenCV
-- **LINE SDK**: line-bot-sdk 3.x
-- **Deployment**: Docker + Google Cloud Run
+---
 
-## Project Structure
-
-```
-plant-disease-chatbot/
+## 🏗️ โครงสร้างโปรเจกต์ (New Architecture)
+```text
+├── api/             # Vercel Serverless Functions
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app
-│   ├── config.py            # Configuration
-│   ├── models.py            # Pydantic models
-│   ├── handlers/
-│   │   ├── line_handler.py  # LINE webhook handler
-│   │   └── message_handler.py
-│   ├── services/
-│   │   ├── gemini_service.py    # Gemini API client
-│   │   ├── image_service.py     # Image optimization
-│   │   └── cache_service.py     # Redis operations
-│   ├── utils/
-│   │   ├── flex_messages.py # LINE Flex Message templates
-│   │   └── parsers.py       # Text parsing utilities
-│   └── database/
-│       ├── models.py        # SQLAlchemy models
-│       └── crud.py          # Database operations
-├── tests/
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env.example
-└── README.md
+│   ├── handlers/    # ตัวจัดการ Webhook และ Message
+│   ├── services/    # AI Service และ Session Management (In-memory)
+│   ├── utils/       # UI/Flex Message Templates
+│   └── models.py    # Data Schemas
+├── vercel.json      # การตั้งค่าการ Deploy บน Vercel
+└── requirements.txt # รายการ Library ที่จำเป็น
 ```
 
-## Quick Start
+---
 
-### 1. Clone Repository
+## 🚀 การติดตั้งและใช้งาน (Local)
 
-```bash
-git clone https://github.com/your-username/plant-disease-chatbot.git
-cd plant-disease-chatbot
-```
+1. **โคลนโปรเจกต์:**
+   ```bash
+   git clone <your-repo-url>
+   cd Chatbot_llm_npu
+   ```
 
-### 2. Setup Environment Variables
+2. **ติดตั้ง Dependencies:**
+   ```bash
+   python -m venv venv
+   # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
+3. **ตั้งค่า .env:**
+   สร้าไฟล์ `.env` ใน Root directory และใส่ข้อมูลดังนี้:
+   ```env
+   LINE_CHANNEL_ACCESS_TOKEN=your_token
+   LINE_CHANNEL_SECRET=your_secret
+   GEMINI_API_KEY=your_key
+   ```
 
-Required environment variables:
-- `LINE_CHANNEL_ACCESS_TOKEN` - LINE Messaging API token
-- `LINE_CHANNEL_SECRET` - LINE Channel secret
-- `GEMINI_API_KEY` - Google Gemini API key
+4. **รันระบบ:**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
 
-### 3. Run with Docker Compose
+---
 
-```bash
-# Production
-docker-compose up -d
+## ☁️ วิธีการ Deploy ไปยัง Vercel (แนะนำ)
 
-# Development (with hot reload)
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-```
+1. **GitHub Push:** อัปโหลดโค้ดทั้งหมดขึ้น GitHub
+2. **Vercel Setup:**
+   - เชื่อมต่อ Repository บน Vercel Dashboard
+   - เพิ่ม **Environment Variables** (3 ตัวด้านบน) ในหน้า Settings
+   - กด **Deploy**
+3. **Webhook Binding:** นำ URL ที่ได้จาก Vercel ไปใส่ใน LINE Developers Console (ตัวอย่าง: `https://your-app.vercel.app/webhook`)
 
-### 4. Run Locally (Development)
+---
 
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
+## 🛠️ การตั้งค่าขั้นสูง (config.py)
+คุณสามารถปรับแต่งค่าต่างๆ ได้ เช่น:
+- `MAX_IMAGE_SIZE_MB`: จำกัดขนาดรูปภาพ (เริ่มต้น 5MB)
+- `MAX_REQUESTS_PER_HOUR`: จำกัดจำนวนการถามต่อชั่วโมง
+- `GEMINI_MODEL`: เปลี่ยนรุ่นของ Gemini ที่ต้องการใช้
 
-# Install dependencies
-pip install -r requirements.txt
+---
 
-# Run application
-uvicorn app.main:app --reload
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API token | Required |
-| `LINE_CHANNEL_SECRET` | LINE Channel secret | Required |
-| `GEMINI_API_KEY` | Google Gemini API key | Required |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
-| `DATABASE_URL` | PostgreSQL connection URL | `postgresql://...` |
-| `ENVIRONMENT` | Environment (dev/staging/prod) | `dev` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `MAX_IMAGE_SIZE_MB` | Max image size in MB | `5` |
-| `MAX_REQUESTS_PER_HOUR` | Rate limit per user | `10` |
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Root endpoint |
-| `/health` | GET | Health check |
-| `/webhook` | POST | LINE webhook |
-| `/stats` | GET | Statistics (dev only) |
-
-## LINE Bot Setup
-
-1. สร้าง LINE Official Account ที่ [LINE Developers](https://developers.line.biz/)
-2. เปิดใช้งาน Messaging API
-3. ตั้งค่า Webhook URL: `https://your-domain.com/webhook`
-4. คัดลอก Channel Access Token และ Channel Secret
-
-## Gemini API Setup
-
-1. สร้าง API key ที่ [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. คัดลอก API key ไปใส่ใน `.env`
-
-## Usage Flow
-
-1. ผู้ใช้ส่งรูปภาพพืชที่สงสัยว่าเป็นโรค
-2. Bot ถามข้อมูลเพิ่มเติม (ชนิดพืช, ภูมิภาค)
-3. ผู้ใช้เลือกข้อมูลจาก Flex Message
-4. Bot วิเคราะห์ภาพด้วย Gemini AI
-5. Bot ส่งผลวินิจฉัยพร้อมคำแนะนำการรักษา
-
-## Testing
-
-```bash
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=app --cov-report=html
-
-# Run specific test file
-pytest tests/test_models.py -v
-```
-
-## Deployment
-
-### Google Cloud Run
-
-```bash
-# Build and push image
-gcloud builds submit --tag gcr.io/PROJECT_ID/plant-disease-chatbot
-
-# Deploy
-gcloud run deploy plant-disease-chatbot \
-  --image gcr.io/PROJECT_ID/plant-disease-chatbot \
-  --platform managed \
-  --region asia-southeast1 \
-  --allow-unauthenticated \
-  --set-env-vars="ENVIRONMENT=prod"
-```
-
-### Docker
-
-```bash
-# Build
-docker build -t plant-disease-chatbot .
-
-# Run
-docker run -p 8000:8000 --env-file .env plant-disease-chatbot
-```
-
-## Performance Targets
-
-- Response time: < 5s (95th percentile)
-- Throughput: 100 requests/minute
-- Cache hit rate: > 30%
-- Uptime: 99.5%
-
-## Cost Estimation (1,000 users/day)
-
-- Gemini API: ~$7/month
-- Cloud Run: ~$10/month
-- Redis: ~$5/month
-- PostgreSQL: ~$10/month
-- **Total**: ~$30/month
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details
-
-## Acknowledgments
-
-- Google Gemini AI for vision capabilities
-- LINE Messaging API for chat platform
-- FastAPI for high-performance backend
+## 📄 สัญญาอนุญาต
+โปรเจกต์นี้ใช้สัญญาอนุญาตแบบ **MIT License**

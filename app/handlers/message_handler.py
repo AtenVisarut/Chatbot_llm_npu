@@ -16,7 +16,7 @@ from linebot.v3.messaging import (
 
 from app.config import get_settings
 from app.models import DiagnosisResult, ERROR_MESSAGES, PlantType, UserState
-from app.services.cache_service import cache_service
+from app.services.session_service import session_service
 from app.services.gemini_service import GeminiAPIError, gemini_service
 from app.utils.flex_messages import FlexMessageBuilder
 
@@ -33,7 +33,7 @@ class MessageHandler:
 
     Manages:
     - Diagnosis processing pipeline
-    - Result caching and retrieval
+    - Result management
     - Push message sending
     """
 
@@ -43,7 +43,7 @@ class MessageHandler:
             access_token=settings.line_channel_access_token
         )
         # Store last diagnosis result per user
-        self._diagnosis_cache: dict[str, DiagnosisResult] = {}
+        self._last_results: dict[str, DiagnosisResult] = {}
 
     def _get_messaging_api(self) -> MessagingApi:
         """Get MessagingApi client."""
@@ -90,9 +90,9 @@ class MessageHandler:
             line_handler: LINE handler for sending messages
         """
         try:
-            # Get user data from cache
-            image_data, content_type = await cache_service.get_user_image(user_id)
-            user_info = await cache_service.get_user_info(user_id)
+            # Get user data from session
+            image_data, content_type = await session_service.get_user_image(user_id)
+            user_info = await session_service.get_user_info(user_id)
 
             if not image_data:
                 self._push_flex(
@@ -101,46 +101,27 @@ class MessageHandler:
                         ERROR_MESSAGES["session_expired"]
                     )
                 )
-                await cache_service.clear_user_session(user_id)
+                await session_service.clear_user_session(user_id)
                 return
 
             # Get plant type (default to rice if not specified)
             plant_type = user_info.plant_type or PlantType.RICE
 
-            # Check for cached diagnosis
-            cached_result = await cache_service.get_cached_diagnosis(
-                image_data,
-                plant_type.value,
-                user_info.region.value if user_info.region else None
+            # Call Gemini for diagnosis
+            logger.info(f"Running Gemini diagnosis for user {user_id}")
+            result = await gemini_service.diagnose(
+                image_data=image_data,
+                plant_type=plant_type,
+                content_type=content_type or "image/jpeg",
+                region=user_info.region,
+                additional_info=user_info.additional_info
             )
 
-            if cached_result:
-                logger.info(f"Using cached diagnosis for user {user_id}")
-                result = cached_result
-            else:
-                # Call Gemini for diagnosis
-                logger.info(f"Running Gemini diagnosis for user {user_id}")
-                result = await gemini_service.diagnose(
-                    image_data=image_data,
-                    plant_type=plant_type,
-                    content_type=content_type or "image/jpeg",
-                    region=user_info.region,
-                    additional_info=user_info.additional_info
-                )
-
-                # Cache the result
-                await cache_service.cache_diagnosis(
-                    image_data,
-                    plant_type.value,
-                    user_info.region.value if user_info.region else None,
-                    result
-                )
-
-            # Store in memory cache for quick access
-            self._diagnosis_cache[user_id] = result
+            # Store in memory for quick access during the session
+            self._last_results[user_id] = result
 
             # Increment rate limit counter
-            await cache_service.increment_rate_counter(user_id)
+            await session_service.increment_rate_counter(user_id)
 
             # Check confidence level
             if result.confidence_level < 50:
@@ -158,7 +139,7 @@ class MessageHandler:
                 )
 
             # Update state
-            await cache_service.set_user_state(user_id, UserState.COMPLETED)
+            await session_service.set_user_state(user_id, UserState.COMPLETED)
 
         except GeminiAPIError as e:
             logger.error(f"Gemini API error for user {user_id}: {e}")
@@ -166,7 +147,7 @@ class MessageHandler:
                 user_id,
                 FlexMessageBuilder.create_error_message(e.user_message)
             )
-            await cache_service.set_user_state(user_id, UserState.IDLE)
+            await session_service.set_user_state(user_id, UserState.IDLE)
 
         except Exception as e:
             logger.error(f"Diagnosis failed for user {user_id}: {e}")
@@ -176,7 +157,7 @@ class MessageHandler:
                     ERROR_MESSAGES["api_error"]
                 )
             )
-            await cache_service.set_user_state(user_id, UserState.IDLE)
+            await session_service.set_user_state(user_id, UserState.IDLE)
 
     async def show_treatment(
         self,
@@ -192,7 +173,7 @@ class MessageHandler:
             reply_token: LINE reply token
             line_handler: LINE handler for sending messages
         """
-        result = self._diagnosis_cache.get(user_id)
+        result = self._last_results.get(user_id)
 
         if result:
             line_handler._reply_flex(
@@ -219,7 +200,7 @@ class MessageHandler:
             reply_token: LINE reply token
             line_handler: LINE handler for sending messages
         """
-        result = self._diagnosis_cache.get(user_id)
+        result = self._last_results.get(user_id)
 
         if result:
             line_handler._reply_flex(
@@ -232,12 +213,9 @@ class MessageHandler:
                 "ไม่พบผลวินิจฉัย กรุณาส่งรูปภาพใหม่"
             )
 
-    def clear_user_cache(self, user_id: str) -> None:
+    def clear_user_results(self, user_id: str) -> None:
         """
-        Clear diagnosis cache for user.
-
-        Args:
-            user_id: LINE user ID
+        Clear diagnosis results for user.
         """
-        if user_id in self._diagnosis_cache:
-            del self._diagnosis_cache[user_id]
+        if user_id in self._last_results:
+            del self._last_results[user_id]

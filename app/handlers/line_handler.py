@@ -27,7 +27,7 @@ from linebot.v3.webhooks import (
 from app.config import get_settings
 from app.handlers.message_handler import MessageHandler
 from app.models import ERROR_MESSAGES, PlantType, Region, UserState
-from app.services.cache_service import cache_service
+from app.services.session_service import session_service
 from app.services.image_service import ImageValidationError, image_service
 from app.utils.flex_messages import FlexMessageBuilder
 from app.utils.parsers import (
@@ -216,7 +216,7 @@ class LineHandler:
             return
 
         # Get current user state
-        state = await cache_service.get_user_state(user_id)
+        state = await session_service.get_user_state(user_id)
 
         if state == UserState.WAITING_FOR_PLANT_TYPE:
             await self._handle_plant_type_input(
@@ -248,7 +248,7 @@ class LineHandler:
 
         try:
             # Check rate limit
-            is_allowed, remaining = await cache_service.check_rate_limit(user_id)
+            is_allowed, remaining = await session_service.check_rate_limit(user_id)
             if not is_allowed:
                 self._reply_flex(
                     reply_token,
@@ -264,13 +264,13 @@ class LineHandler:
                 settings.line_channel_access_token
             )
 
-            # Store image in cache
-            await cache_service.set_user_image(
+            # Store image in session
+            await session_service.set_user_image(
                 user_id, image_data, content_type
             )
 
             # Update state to waiting for plant type
-            await cache_service.set_user_state(
+            await session_service.set_user_state(
                 user_id, UserState.WAITING_FOR_PLANT_TYPE
             )
 
@@ -314,7 +314,7 @@ class LineHandler:
             plant_type_str = data["plant_type"]
 
             if plant_type_str == "other":
-                await cache_service.set_user_state(
+                await session_service.set_user_state(
                     user_id, UserState.WAITING_FOR_PLANT_TYPE
                 )
                 self._reply_text(
@@ -358,7 +358,7 @@ class LineHandler:
 
         # Handle new diagnosis
         elif data.get("new_diagnosis"):
-            await cache_service.clear_user_session(user_id)
+            await session_service.clear_user_session(user_id)
             self._reply_text(
                 reply_token,
                 "กรุณาส่งรูปภาพพืชที่ต้องการวินิจฉัยโรค 📷"
@@ -366,7 +366,7 @@ class LineHandler:
 
         # Handle retry
         elif data.get("retry"):
-            await cache_service.clear_user_session(user_id)
+            await session_service.clear_user_session(user_id)
             self._reply_text(
                 reply_token,
                 "กรุณาส่งรูปภาพใหม่อีกครั้ง 📷"
@@ -406,12 +406,12 @@ class LineHandler:
             )
         else:
             # Store as other plant type with custom name
-            user_info = await cache_service.get_user_info(user_id)
+            user_info = await session_service.get_user_info(user_id)
             user_info.additional_info = f"ชนิดพืช: {text}"
-            await cache_service.set_user_info(user_id, user_info)
+            await session_service.set_user_info(user_id, user_info)
 
             # Proceed to region selection
-            await cache_service.set_user_state(
+            await session_service.set_user_state(
                 user_id, UserState.WAITING_FOR_LOCATION
             )
             self._reply_flex(
@@ -436,10 +436,10 @@ class LineHandler:
                 )
             else:
                 # Add as additional info
-                user_info = await cache_service.get_user_info(user_id)
+                user_info = await session_service.get_user_info(user_id)
                 additional = user_info.additional_info or ""
                 user_info.additional_info = f"{additional} ภูมิภาค: {text}".strip()
-                await cache_service.set_user_info(user_id, user_info)
+                await session_service.set_user_info(user_id, user_info)
                 await self._proceed_to_diagnosis(user_id, reply_token)
 
     async def _set_plant_type_and_proceed(
@@ -449,12 +449,12 @@ class LineHandler:
         reply_token: str
     ) -> None:
         """Set plant type and proceed to region selection."""
-        user_info = await cache_service.get_user_info(user_id)
+        user_info = await session_service.get_user_info(user_id)
         user_info.plant_type = plant_type
-        await cache_service.set_user_info(user_id, user_info)
+        await session_service.set_user_info(user_id, user_info)
 
         # Move to location selection
-        await cache_service.set_user_state(
+        await session_service.set_user_state(
             user_id, UserState.WAITING_FOR_LOCATION
         )
 
@@ -470,9 +470,9 @@ class LineHandler:
         reply_token: str
     ) -> None:
         """Set region and start diagnosis."""
-        user_info = await cache_service.get_user_info(user_id)
+        user_info = await session_service.get_user_info(user_id)
         user_info.region = region
-        await cache_service.set_user_info(user_id, user_info)
+        await session_service.set_user_info(user_id, user_info)
 
         await self._proceed_to_diagnosis(user_id, reply_token)
 
@@ -489,7 +489,7 @@ class LineHandler:
         )
 
         # Update state
-        await cache_service.set_user_state(user_id, UserState.PROCESSING)
+        await session_service.set_user_state(user_id, UserState.PROCESSING)
 
         # Run diagnosis (this will send result via push message)
         await self.message_handler.process_diagnosis(user_id, self)

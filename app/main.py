@@ -16,10 +16,9 @@ from linebot.v3.exceptions import InvalidSignatureError
 
 from app import __version__
 from app.config import get_settings
-from app.database.crud import db
 from app.handlers.line_handler import line_handler
 from app.models import ErrorResponse, HealthCheckResponse
-from app.services.cache_service import cache_service
+from app.services.session_service import session_service
 from app.services.gemini_service import gemini_service
 
 # Configure logging
@@ -46,18 +45,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.environment}")
 
     try:
-        # Connect to Redis
-        await cache_service.connect()
-        logger.info("Connected to Redis")
-
-        # Initialize database
-        await db.create_tables()
-        logger.info("Database initialized")
+        # Connect to In-memory Session store
+        await session_service.connect()
+        logger.info("In-memory session service connected")
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
-        if settings.is_production:
-            raise
 
     yield
 
@@ -65,8 +58,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
 
     try:
-        await cache_service.disconnect()
-        await db.close()
+        await session_service.disconnect()
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
 
@@ -184,21 +176,8 @@ async def health_check():
     """
     services = {}
 
-    # Check Redis
-    redis_healthy = await cache_service.health_check()
-    services["redis"] = "healthy" if redis_healthy else "unhealthy"
-
-    # Check Database
-    db_healthy = await db.health_check()
-    services["database"] = "healthy" if db_healthy else "unhealthy"
-
-    # Check Gemini
-    gemini_healthy = await gemini_service.health_check()
-    services["gemini"] = "healthy" if gemini_healthy else "unhealthy"
-
     # Overall status
-    all_healthy = all(s == "healthy" for s in services.values())
-    status_str = "healthy" if all_healthy else "degraded"
+    status_str = "healthy"
 
     return HealthCheckResponse(
         status=status_str,
@@ -252,7 +231,7 @@ async def get_statistics():
     """
     Get application statistics.
 
-    Returns diagnosis statistics and cache stats.
+    Returns diagnosis statistics (if enabled) and session stats.
     """
     if settings.is_production:
         raise HTTPException(
@@ -260,14 +239,10 @@ async def get_statistics():
             detail="Stats endpoint disabled in production"
         )
 
-    daily_stats = await db.get_daily_statistics()
-    disease_dist = await db.get_disease_distribution(days=7)
-    cache_stats = await cache_service.get_stats()
+    session_stats = await session_service.get_stats()
 
     return {
-        "daily_statistics": daily_stats,
-        "disease_distribution": disease_dist,
-        "cache_stats": cache_stats
+        "session_stats": session_stats
     }
 
 
@@ -282,14 +257,13 @@ if settings.is_development:
             "environment": settings.environment,
             "log_level": settings.log_level,
             "max_image_size_mb": settings.max_image_size_mb,
-            "cache_expiry_hours": settings.cache_expiry_hours,
             "max_requests_per_hour": settings.max_requests_per_hour,
         }
 
-    @app.post("/debug/clear-cache")
-    async def debug_clear_cache(user_id: str):
-        """Clear user cache (development only)."""
-        await cache_service.clear_user_session(user_id)
+    @app.post("/debug/clear-session")
+    async def debug_clear_session(user_id: str):
+        """Clear user session (development only)."""
+        await session_service.clear_user_session(user_id)
         return {"status": "cleared", "user_id": user_id}
 
 
