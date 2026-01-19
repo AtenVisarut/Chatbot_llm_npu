@@ -57,16 +57,23 @@
    uvicorn app.main:app --reload
    ```
 
----
+## ☁️ การ Deployment
 
-## ☁️ วิธีการ Deploy ไปยัง Vercel (แนะนำ)
+### ตัวเลือกที่ 1: Render (แนะนำสำหรับคอมพิวเตอร์สเปกจำลองที่ใหญ่กว่า)
+1. เชื่อมต่อ GitHub กับ [Render.com](https://render.com/)
+2. สร้าง **New Web Service**
+3. ตั้งค่าดังนี้:
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. เพิ่ม **Environment Variables** (3 ตัวหลัก) ในหน้า Settings
+5. Webhook URL: `https://your-service-name.onrender.com/webhook`
 
-1. **GitHub Push:** อัปโหลดโค้ดทั้งหมดขึ้น GitHub
-2. **Vercel Setup:**
-   - เชื่อมต่อ Repository บน Vercel Dashboard
-   - เพิ่ม **Environment Variables** (3 ตัวด้านบน) ในหน้า Settings
-   - กด **Deploy**
-3. **Webhook Binding:** นำ URL ที่ได้จาก Vercel ไปใส่ใน LINE Developers Console (ตัวอย่าง: `https://your-app.vercel.app/webhook`)
+### ตัวเลือกที่ 2: Vercel (ฟรีและเร็ว แต่จำกัดขนาดไฟล์)
+1. เชื่อมต่อ Repository บน Vercel Dashboard
+2. เพิ่ม **Environment Variables** (3 ตัวหลัก)
+3. กด **Deploy**
+4. Webhook URL: `https://your-app.vercel.app/webhook`
 
 ---
 
