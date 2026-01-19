@@ -4,7 +4,7 @@ Tests for Parser Utilities
 
 import pytest
 
-from app.models import PlantType, Region
+from app.models import PlantPart, PlantType
 from app.utils.parsers import (
     extract_numbers,
     extract_plant_info,
@@ -14,7 +14,7 @@ from app.utils.parsers import (
     normalize_thai_text,
     parse_plant_type,
     parse_postback_data,
-    parse_region,
+    parse_plant_part,
     parse_user_response,
     sanitize_text,
 )
@@ -30,8 +30,8 @@ class TestParsePostbackData:
 
     def test_multiple_values(self):
         """Test parsing multiple key-value pairs."""
-        result = parse_postback_data("plant_type=RICE&region=NORTH")
-        assert result == {"plant_type": "RICE", "region": "NORTH"}
+        result = parse_postback_data("plant_type=RICE&plant_part=LEAF")
+        assert result == {"plant_type": "RICE", "plant_part": "LEAF"}
 
     def test_empty_string(self):
         """Test parsing empty string."""
@@ -76,28 +76,24 @@ class TestParsePlantType:
         assert parse_plant_type("นาข้าวของผม") == PlantType.RICE
 
 
-class TestParseRegion:
-    """Test region parsing."""
+class TestParsePlantPart:
+    """Test plant part parsing."""
 
-    def test_thai_north(self):
-        """Test parsing Thai word for north."""
-        assert parse_region("ภาคเหนือ") == Region.NORTH
+    def test_thai_leaf(self):
+        """Test parsing Thai word for leaf."""
+        assert parse_plant_part("ใบ") == PlantPart.LEAF
 
-    def test_thai_northeast(self):
-        """Test parsing Thai word for northeast."""
-        assert parse_region("อีสาน") == Region.NORTHEAST
+    def test_thai_stem(self):
+        """Test parsing Thai word for stem."""
+        assert parse_plant_part("ลำต้น") == PlantPart.STEM
 
-    def test_english_central(self):
-        """Test parsing English word for central."""
-        assert parse_region("central") == Region.CENTRAL
+    def test_english_root(self):
+        """Test parsing English word for root."""
+        assert parse_plant_part("root") == PlantPart.ROOT
 
-    def test_short_form(self):
-        """Test parsing short form."""
-        assert parse_region("เหนือ") == Region.NORTH
-
-    def test_unknown_region(self):
-        """Test parsing unknown region returns None."""
-        assert parse_region("unknown") is None
+    def test_unknown_part(self):
+        """Test parsing unknown part returns None."""
+        assert parse_plant_part("unknown") is None
 
 
 class TestIsGreeting:
@@ -212,10 +208,10 @@ class TestParseUserResponse:
         result = parse_user_response("ข้าวนาปี")
         assert result["plant_type"] == PlantType.RICE
 
-    def test_extracts_region(self):
-        """Test region extraction."""
-        result = parse_user_response("ภาคอีสาน")
-        assert result["region"] == Region.NORTHEAST
+    def test_extracts_plant_part(self):
+        """Test plant part extraction."""
+        result = parse_user_response("ใบเหลือง")
+        assert result["plant_part"] == PlantPart.LEAF
 
     def test_stores_additional_info(self):
         """Test storing unknown text as additional info."""
@@ -228,6 +224,6 @@ class TestExtractPlantInfo:
 
     def test_extracts_all_info(self):
         """Test extracting all information."""
-        plant_type, region, additional = extract_plant_info("ข้าว ภาคเหนือ")
+        plant_type, plant_part, additional = extract_plant_info("ข้าว ใบไหม้")
         assert plant_type == PlantType.RICE
-        # Note: region parsing from same string might vary
+        assert plant_part == PlantPart.LEAF

@@ -9,8 +9,8 @@ from app.models import (
     ChemicalControl,
     DiagnosisResult,
     DiseaseCharacteristics,
+    PlantPart,
     PlantType,
-    Region,
     Severity,
     Treatment,
     UserInfo,
@@ -27,11 +27,11 @@ class TestEnums:
         assert PlantType.CORN.value == "ข้าวโพด"
         assert PlantType.CASSAVA.value == "มันสำปะหลัง"
 
-    def test_region_values(self):
-        """Test Region enum values."""
-        assert Region.NORTH.value == "ภาคเหนือ"
-        assert Region.NORTHEAST.value == "ภาคอีสาน"
-        assert Region.CENTRAL.value == "ภาคกลาง"
+    def test_plant_part_values(self):
+        """Test PlantPart enum values."""
+        assert PlantPart.LEAF.value == "ใบ"
+        assert PlantPart.STEM.value == "ลำต้น"
+        assert PlantPart.ROOT.value == "ราก"
 
     def test_severity_values(self):
         """Test Severity enum values."""
@@ -156,15 +156,15 @@ class TestUserInfo:
         """Test default values for UserInfo."""
         info = UserInfo()
         assert info.plant_type is None
-        assert info.region is None
+        assert info.plant_part is None
         assert info.additional_info is None
 
     def test_with_values(self):
         """Test UserInfo with values."""
         info = UserInfo(
             plant_type=PlantType.RICE,
-            region=Region.NORTHEAST,
+            plant_part=PlantPart.LEAF,
             additional_info="ข้าวอายุ 2 เดือน"
         )
         assert info.plant_type == PlantType.RICE
-        assert info.region == Region.NORTHEAST
+        assert info.plant_part == PlantPart.LEAF

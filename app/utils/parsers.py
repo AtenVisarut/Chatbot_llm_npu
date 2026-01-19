@@ -7,7 +7,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs
 
-from app.models import PlantType, Region
+from app.models import PlantPart, PlantType
 
 
 def parse_postback_data(data: str) -> dict[str, str]:
@@ -85,57 +85,47 @@ def parse_plant_type(text: str) -> PlantType | None:
     return None
 
 
-def parse_region(text: str) -> Region | None:
+def parse_plant_part(text: str) -> PlantPart | None:
     """
-    Parse region from user text input.
+    Parse plant part from user text input.
 
     Args:
         text: User input text
 
     Returns:
-        Region enum or None if not recognized
+        PlantPart enum or None if not recognized
     """
     text_lower = text.lower().strip()
 
     # Thai mappings
     thai_mappings = {
-        "เหนือ": Region.NORTH,
-        "ภาคเหนือ": Region.NORTH,
-        "อีสาน": Region.NORTHEAST,
-        "ภาคอีสาน": Region.NORTHEAST,
-        "ตะวันออกเฉียงเหนือ": Region.NORTHEAST,
-        "กลาง": Region.CENTRAL,
-        "ภาคกลาง": Region.CENTRAL,
-        "ใต้": Region.SOUTH,
-        "ภาคใต้": Region.SOUTH,
-        "ตะวันออก": Region.EAST,
-        "ภาคตะวันออก": Region.EAST,
-        "ตะวันตก": Region.WEST,
-        "ภาคตะวันตก": Region.WEST,
+        "ใบ": PlantPart.LEAF,
+        "ลำต้น": PlantPart.STEM,
+        "ราก": PlantPart.ROOT,
+        "กาบใบ": PlantPart.SHEATH,
+        "กาบ": PlantPart.SHEATH,
     }
 
-    for key, region in thai_mappings.items():
+    for key, part in thai_mappings.items():
         if key in text_lower:
-            return region
+            return part
 
     # English mappings
     english_mappings = {
-        "north": Region.NORTH,
-        "northeast": Region.NORTHEAST,
-        "central": Region.CENTRAL,
-        "south": Region.SOUTH,
-        "east": Region.EAST,
-        "west": Region.WEST,
+        "leaf": PlantPart.LEAF,
+        "stem": PlantPart.STEM,
+        "root": PlantPart.ROOT,
+        "sheath": PlantPart.SHEATH,
     }
 
-    for key, region in english_mappings.items():
+    for key, part in english_mappings.items():
         if key in text_lower:
-            return region
+            return part
 
     # Try matching enum names
-    for region in Region:
-        if region.name.lower() == text_lower:
-            return region
+    for part in PlantPart:
+        if part.name.lower() == text_lower:
+            return part
 
     return None
 
@@ -152,31 +142,31 @@ def parse_user_response(text: str) -> dict[str, Any]:
     """
     result = {
         "plant_type": parse_plant_type(text),
-        "region": parse_region(text),
+        "plant_part": parse_plant_part(text),
         "additional_info": None,
     }
 
-    # If no plant type or region found, treat as additional info
-    if result["plant_type"] is None and result["region"] is None:
+    # If no plant type or part found, treat as additional info
+    if result["plant_type"] is None and result["plant_part"] is None:
         result["additional_info"] = text.strip()
 
     return result
 
 
-def extract_plant_info(text: str) -> tuple[PlantType | None, Region | None, str | None]:
+def extract_plant_info(text: str) -> tuple[PlantType | None, PlantPart | None, str | None]:
     """
-    Extract plant type, region, and additional info from text.
+    Extract plant type, plant part, and additional info from text.
 
     Args:
         text: User input text
 
     Returns:
-        Tuple of (plant_type, region, additional_info)
+        Tuple of (plant_type, plant_part, additional_info)
     """
     parsed = parse_user_response(text)
     return (
         parsed["plant_type"],
-        parsed["region"],
+        parsed["plant_part"],
         parsed["additional_info"]
     )
 
