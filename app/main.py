@@ -187,16 +187,26 @@ async def health_check():
     )
 
 
-@app.post("/webhook")
+@app.api_route("/webhook", methods=["GET", "POST"])
 async def webhook(request: Request):
     """
     LINE webhook endpoint.
-
-    Handles incoming LINE events.
+    Handles incoming LINE events and provides a GET heartbeat.
     """
+    logger.info(f"Received {request.method} request on /webhook")
+
+    if request.method == "GET":
+        return {
+            "status": "active",
+            "message": "LINE Webhook endpoint is ready to receive POST requests.",
+            "timestamp": datetime.utcnow()
+        }
+
+    # Handle POST (LINE Webhook Events)
     # Get signature
     signature = request.headers.get("X-Line-Signature", "")
     if not signature:
+        logger.warning("Missing X-Line-Signature header")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing X-Line-Signature header"
@@ -206,7 +216,7 @@ async def webhook(request: Request):
     body = await request.body()
     body_str = body.decode("utf-8")
 
-    logger.info(f"Webhook received: {len(body_str)} bytes")
+    logger.info(f"Webhook POST received: {len(body_str)} bytes")
 
     try:
         line_handler.handle_webhook(body_str, signature)
