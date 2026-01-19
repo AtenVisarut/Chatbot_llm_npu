@@ -219,7 +219,7 @@ async def webhook(request: Request):
     logger.info(f"Webhook POST received: {len(body_str)} bytes")
 
     try:
-        line_handler.handle_webhook(body_str, signature)
+        await line_handler.handle_webhook(body_str, signature)
     except InvalidSignatureError:
         logger.warning("Invalid signature")
         raise HTTPException(

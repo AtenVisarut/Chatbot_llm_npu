@@ -6,7 +6,7 @@ Handles LINE webhook events and message routing
 import logging
 from typing import Any
 
-from linebot.v3 import WebhookHandler
+from linebot.v3 import WebhookHandler, AsyncWebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     ApiClient,
@@ -57,7 +57,7 @@ class LineHandler:
 
     def __init__(self):
         """Initialize LINE handler with SDK clients."""
-        self.webhook_handler = WebhookHandler(settings.line_channel_secret)
+        self.webhook_handler = AsyncWebhookHandler(settings.line_channel_secret)
         self.configuration = Configuration(
             access_token=settings.line_channel_access_token
         )
@@ -70,26 +70,26 @@ class LineHandler:
         """Register event handlers with webhook handler."""
 
         @self.webhook_handler.add(MessageEvent, message=TextMessageContent)
-        def handle_text_message(event: MessageEvent) -> None:
+        async def handle_text_message(event: MessageEvent) -> None:
             """Handle text message events."""
-            self._handle_text_message_sync(event)
+            await self._handle_text_message(event)
 
         @self.webhook_handler.add(MessageEvent, message=ImageMessageContent)
-        def handle_image_message(event: MessageEvent) -> None:
+        async def handle_image_message(event: MessageEvent) -> None:
             """Handle image message events."""
-            self._handle_image_message_sync(event)
+            await self._handle_image_message(event)
 
         @self.webhook_handler.add(PostbackEvent)
-        def handle_postback(event: PostbackEvent) -> None:
+        async def handle_postback(event: PostbackEvent) -> None:
             """Handle postback events."""
-            self._handle_postback_sync(event)
+            await self._handle_postback(event)
 
         @self.webhook_handler.add(FollowEvent)
-        def handle_follow(event: FollowEvent) -> None:
+        async def handle_follow(event: FollowEvent) -> None:
             """Handle follow events."""
-            self._handle_follow_sync(event)
+            await self._handle_follow(event)
 
-    def handle_webhook(self, body: str, signature: str) -> None:
+    async def handle_webhook(self, body: str, signature: str) -> None:
         """
         Handle incoming webhook request.
 
@@ -100,7 +100,7 @@ class LineHandler:
         Raises:
             InvalidSignatureError: If signature verification fails
         """
-        self.webhook_handler.handle(body, signature)
+        await self.webhook_handler.handle(body, signature)
 
     def _get_messaging_api(self) -> MessagingApi:
         """Get MessagingApi client."""
@@ -138,51 +138,6 @@ class LineHandler:
         """Send a flex message reply."""
         self._reply_message(reply_token, [flex_message])
 
-    # ==================== Synchronous Event Handlers ====================
-
-    def _handle_text_message_sync(self, event: MessageEvent) -> None:
-        """Handle text message event (sync wrapper)."""
-        import asyncio
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._handle_text_message(event))
-        finally:
-            loop.close()
-
-    def _handle_image_message_sync(self, event: MessageEvent) -> None:
-        """Handle image message event (sync wrapper)."""
-        import asyncio
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._handle_image_message(event))
-        finally:
-            loop.close()
-
-    def _handle_postback_sync(self, event: PostbackEvent) -> None:
-        """Handle postback event (sync wrapper)."""
-        import asyncio
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._handle_postback(event))
-        finally:
-            loop.close()
-
-    def _handle_follow_sync(self, event: FollowEvent) -> None:
-        """Handle follow event (sync wrapper)."""
-        import asyncio
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._handle_follow(event))
-        finally:
-            loop.close()
 
     # ==================== Async Event Handlers ====================
 
