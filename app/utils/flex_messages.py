@@ -21,7 +21,7 @@ from linebot.v3.messaging import (
     URIAction,
 )
 
-from app.models import DiagnosisResult, PlantType, Region, Severity
+from app.models import DiagnosisResult, PlantPart, PlantType, Severity
 
 
 class FlexMessageBuilder:
@@ -157,12 +157,12 @@ class FlexMessageBuilder:
         )
 
     @classmethod
-    def create_region_request_message(cls) -> FlexMessage:
+    def create_plant_part_request_message(cls) -> FlexMessage:
         """
-        Create region selection message.
+        Create plant part selection message.
 
         Returns:
-            FlexMessage asking for region
+            FlexMessage asking for affected plant part
         """
         bubble = FlexBubble(
             header=FlexBox(
@@ -171,7 +171,7 @@ class FlexMessageBuilder:
                 padding_all="15px",
                 contents=[
                     FlexText(
-                        text="เลือกภูมิภาค",
+                        text="จุดที่พบอาการ",
                         weight="bold",
                         color=cls.COLORS["white"],
                         size="lg",
@@ -183,7 +183,7 @@ class FlexMessageBuilder:
                 spacing="md",
                 contents=[
                     FlexText(
-                        text="ภูมิภาคช่วยให้วินิจฉัยโรคได้แม่นยำขึ้น",
+                        text="การระบุจุดที่พบอาการช่วยให้วินิจฉัยโรคได้แม่นยำขึ้น",
                         wrap=True,
                         color=cls.COLORS["secondary"],
                         size="sm",
@@ -194,10 +194,10 @@ class FlexMessageBuilder:
                         spacing="sm",
                         margin="md",
                         contents=[
-                            cls._create_region_button(Region.NORTH),
-                            cls._create_region_button(Region.NORTHEAST),
-                            cls._create_region_button(Region.CENTRAL),
-                            cls._create_region_button(Region.SOUTH),
+                            cls._create_plant_part_button(PlantPart.LEAF),
+                            cls._create_plant_part_button(PlantPart.STEM),
+                            cls._create_plant_part_button(PlantPart.ROOT),
+                            cls._create_plant_part_button(PlantPart.SHEATH),
                         ],
                     ),
                 ],
@@ -209,7 +209,7 @@ class FlexMessageBuilder:
                     FlexButton(
                         action=PostbackAction(
                             label="ข้ามขั้นตอนนี้",
-                            data="region=skip"
+                            data="plant_part=skip"
                         ),
                         style="secondary",
                         height="sm",
@@ -218,15 +218,15 @@ class FlexMessageBuilder:
             ),
         )
 
-        return FlexMessage(alt_text="เลือกภูมิภาค", contents=bubble)
+        return FlexMessage(alt_text="จุดที่พบอาการ", contents=bubble)
 
     @classmethod
-    def _create_region_button(cls, region: Region) -> FlexButton:
-        """Create a region selection button."""
+    def _create_plant_part_button(cls, plant_part: PlantPart) -> FlexButton:
+        """Create a plant part selection button."""
         return FlexButton(
             action=PostbackAction(
-                label=region.value,
-                data=f"region={region.name}"
+                label=plant_part.value,
+                data=f"plant_part={plant_part.name}"
             ),
             style="primary",
             height="sm",
@@ -710,7 +710,7 @@ class FlexMessageBuilder:
                         contents=[
                             FlexText(text="2️⃣", size="lg"),
                             FlexText(
-                                text="เลือกชนิดพืชและภูมิภาค",
+                                text="เลือกชนิดพืชและจุดที่พบอาการ",
                                 wrap=True,
                                 size="sm",
                                 flex=5,

@@ -113,7 +113,7 @@ class MessageHandler:
                 image_data=image_data,
                 plant_type=plant_type,
                 content_type=content_type or "image/jpeg",
-                region=user_info.region,
+                plant_part=user_info.plant_part,
                 additional_info=user_info.additional_info
             )
 

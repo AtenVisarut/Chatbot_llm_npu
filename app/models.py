@@ -38,14 +38,13 @@ class PlantType(str, Enum):
     OTHER = "อื่นๆ"
 
 
-class Region(str, Enum):
-    """Thai regions for context."""
-    NORTH = "ภาคเหนือ"
-    NORTHEAST = "ภาคอีสาน"
-    CENTRAL = "ภาคกลาง"
-    SOUTH = "ภาคใต้"
-    EAST = "ภาคตะวันออก"
-    WEST = "ภาคตะวันตก"
+class PlantPart(str, Enum):
+    """Plant parts that can be affected by disease."""
+    LEAF = "ใบ"
+    STEM = "ลำต้น"
+    ROOT = "ราก"
+    SHEATH = "กาบใบ"
+    OTHER = "อื่นๆ"
 
 
 class UserState(str, Enum):
@@ -53,7 +52,7 @@ class UserState(str, Enum):
     IDLE = "idle"
     WAITING_FOR_IMAGE = "waiting_for_image"
     WAITING_FOR_PLANT_TYPE = "waiting_for_plant_type"
-    WAITING_FOR_LOCATION = "waiting_for_location"
+    WAITING_FOR_PLANT_PART = "waiting_for_plant_part"
     PROCESSING = "processing"
     COMPLETED = "completed"
 
@@ -189,9 +188,9 @@ class UserInfo(BaseModel):
         default=None,
         description="ชนิดพืช"
     )
-    region: Region | None = Field(
+    plant_part: PlantPart | None = Field(
         default=None,
-        description="ภูมิภาค"
+        description="จุดที่พบอาการ/ส่วนของพืช"
     )
     additional_info: str | None = Field(
         default=None,
@@ -236,7 +235,7 @@ class DiagnosisRequest(BaseModel):
     """Request model for diagnosis API."""
     image_base64: str = Field(..., description="Base64 encoded image")
     plant_type: PlantType = Field(..., description="Type of plant")
-    region: Region | None = Field(default=None, description="Thai region")
+    plant_part: PlantPart | None = Field(default=None, description="จุดที่พบอาการ")
     additional_info: str | None = Field(
         default=None,
         description="Additional information"

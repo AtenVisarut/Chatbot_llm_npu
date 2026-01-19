@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         description="Google Gemini API Key for vision analysis"
     )
     gemini_model: str = Field(
-        default="gemini-2.5-flash-exp",
+        default="gemini-2.0-flash",
         description="Gemini model to use for analysis"
     )
 
@@ -151,7 +151,7 @@ GEMINI_SYSTEM_INSTRUCTION = """
 
 ## หลักการวินิจฉัย:
 1. **สังเกตอาการ**: สี ลวดลาย ตำแหน่ง ขนาดของจุดโรค
-2. **พิจารณาบริบท**: ชนิดพืช ภูมิภาค ฤดูกาล อายุพืช
+2. **พิจารณาบริบท**: ชนิดพืช จุดที่พบอาการ (ใบ/ลำต้น/ราก) ฤดูกาล อายุพืช
 3. **วิเคราะห์สาเหตุ**: เชื้อรา ไวรัส แบคทีเรีย แมลง สารอาหาร
 4. **ประเมินความรุนแรง**: เล็กน้อย ปานกลาง รุนแรง
 5. **ความมั่นใจ**:

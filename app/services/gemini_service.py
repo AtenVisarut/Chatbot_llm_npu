@@ -14,7 +14,7 @@ import google.generativeai as genai
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
 
 from app.config import DIAGNOSIS_JSON_SCHEMA, GEMINI_SYSTEM_INSTRUCTION, get_settings
-from app.models import DiagnosisResult, ERROR_MESSAGES, PlantType, Region
+from app.models import DiagnosisResult, ERROR_MESSAGES, PlantPart, PlantType
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -99,7 +99,7 @@ class GeminiService:
     def _build_prompt(
         self,
         plant_type: PlantType,
-        region: Region | None = None,
+        plant_part: PlantPart | None = None,
         additional_info: str | None = None
     ) -> str:
         """
@@ -107,7 +107,7 @@ class GeminiService:
 
         Args:
             plant_type: Type of plant
-            region: Thai region
+            plant_part: Affected plant part
             additional_info: Additional information from user
 
         Returns:
@@ -118,8 +118,8 @@ class GeminiService:
             f"ชนิดพืช: {plant_type.value}",
         ]
 
-        if region:
-            prompt_parts.append(f"ภูมิภาค: {region.value}")
+        if plant_part:
+            prompt_parts.append(f"จุดที่พบอาการ: {plant_part.value}")
 
         if additional_info:
             prompt_parts.append(f"ข้อมูลเพิ่มเติมจากผู้ใช้: {additional_info}")
@@ -197,7 +197,7 @@ class GeminiService:
         image_data: bytes,
         plant_type: PlantType,
         content_type: str = "image/jpeg",
-        region: Region | None = None,
+        plant_part: PlantPart | None = None,
         additional_info: str | None = None
     ) -> DiagnosisResult:
         """
@@ -207,7 +207,7 @@ class GeminiService:
             image_data: Image binary data
             plant_type: Type of plant
             content_type: Image MIME type
-            region: Thai region
+            plant_part: Affected plant part
             additional_info: Additional information
 
         Returns:
@@ -216,7 +216,7 @@ class GeminiService:
         Raises:
             GeminiAPIError: If diagnosis fails after retries
         """
-        prompt = self._build_prompt(plant_type, region, additional_info)
+        prompt = self._build_prompt(plant_type, plant_part, additional_info)
         image_content = self._prepare_image_content(image_data, content_type)
 
         last_error = None

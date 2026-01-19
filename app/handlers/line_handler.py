@@ -228,8 +228,8 @@ class LineHandler:
             await self._handle_plant_type_input(
                 user_id, text, reply_token
             )
-        elif state == UserState.WAITING_FOR_LOCATION:
-            await self._handle_location_input(
+        elif state == UserState.WAITING_FOR_PLANT_PART:
+            await self._handle_plant_part_input(
                 user_id, text, reply_token
             )
         else:
@@ -339,17 +339,17 @@ class LineHandler:
                         "ไม่รู้จักชนิดพืชนี้ กรุณาเลือกใหม่"
                     )
 
-        # Handle region selection
-        elif "region" in data:
-            region_str = data["region"]
+        # Handle plant part selection
+        elif "plant_part" in data:
+            plant_part_str = data["plant_part"]
 
-            if region_str == "skip":
+            if plant_part_str == "skip":
                 await self._proceed_to_diagnosis(user_id, reply_token)
             else:
                 try:
-                    region = Region[region_str]
-                    await self._set_region_and_diagnose(
-                        user_id, region, reply_token
+                    plant_part = PlantPart[plant_part_str]
+                    await self._set_plant_part_and_diagnose(
+                        user_id, plant_part, reply_token
                     )
                 except KeyError:
                     await self._proceed_to_diagnosis(user_id, reply_token)
@@ -416,37 +416,31 @@ class LineHandler:
             user_info.additional_info = f"ชนิดพืช: {text}"
             await session_service.set_user_info(user_id, user_info)
 
-            # Proceed to region selection
+            # Proceed to plant part selection
             await session_service.set_user_state(
-                user_id, UserState.WAITING_FOR_LOCATION
+                user_id, UserState.WAITING_FOR_PLANT_PART
             )
             self._reply_flex(
                 reply_token,
-                FlexMessageBuilder.create_region_request_message()
+                FlexMessageBuilder.create_plant_part_request_message()
             )
 
-    async def _handle_location_input(
+    async def _handle_plant_part_input(
         self,
         user_id: str,
         text: str,
         reply_token: str
     ) -> None:
-        """Handle location/region text input."""
+        """Handle plant part text input."""
         if is_skip_command(text):
             await self._proceed_to_diagnosis(user_id, reply_token)
         else:
-            region = parse_region(text)
-            if region:
-                await self._set_region_and_diagnose(
-                    user_id, region, reply_token
-                )
-            else:
-                # Add as additional info
-                user_info = await session_service.get_user_info(user_id)
-                additional = user_info.additional_info or ""
-                user_info.additional_info = f"{additional} ภูมิภาค: {text}".strip()
-                await session_service.set_user_info(user_id, user_info)
-                await self._proceed_to_diagnosis(user_id, reply_token)
+            # We don't really have a parser for plant parts, so just treat as additional info
+            user_info = await session_service.get_user_info(user_id)
+            additional = user_info.additional_info or ""
+            user_info.additional_info = f"{additional} จุดที่พบ: {text}".strip()
+            await session_service.set_user_info(user_id, user_info)
+            await self._proceed_to_diagnosis(user_id, reply_token)
 
     async def _set_plant_type_and_proceed(
         self,
@@ -459,25 +453,25 @@ class LineHandler:
         user_info.plant_type = plant_type
         await session_service.set_user_info(user_id, user_info)
 
-        # Move to location selection
+        # Move to plant part selection
         await session_service.set_user_state(
-            user_id, UserState.WAITING_FOR_LOCATION
+            user_id, UserState.WAITING_FOR_PLANT_PART
         )
 
         self._reply_flex(
             reply_token,
-            FlexMessageBuilder.create_region_request_message()
+            FlexMessageBuilder.create_plant_part_request_message()
         )
 
-    async def _set_region_and_diagnose(
+    async def _set_plant_part_and_diagnose(
         self,
         user_id: str,
-        region: Region,
+        plant_part: PlantPart,
         reply_token: str
     ) -> None:
-        """Set region and start diagnosis."""
+        """Set plant part and start diagnosis."""
         user_info = await session_service.get_user_info(user_id)
-        user_info.region = region
+        user_info.plant_part = plant_part
         await session_service.set_user_info(user_id, user_info)
 
         await self._proceed_to_diagnosis(user_id, reply_token)
