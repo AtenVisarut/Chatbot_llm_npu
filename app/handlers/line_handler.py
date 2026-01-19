@@ -6,7 +6,7 @@ Handles LINE webhook events and message routing
 import logging
 from typing import Any
 
-from linebot.v3 import WebhookHandler, AsyncWebhookHandler
+from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     ApiClient,
@@ -57,7 +57,7 @@ class LineHandler:
 
     def __init__(self):
         """Initialize LINE handler with SDK clients."""
-        self.webhook_handler = AsyncWebhookHandler(settings.line_channel_secret)
+        self.webhook_handler = WebhookHandler(settings.line_channel_secret)
         self.configuration = Configuration(
             access_token=settings.line_channel_access_token
         )
@@ -70,37 +70,39 @@ class LineHandler:
         """Register event handlers with webhook handler."""
 
         @self.webhook_handler.add(MessageEvent, message=TextMessageContent)
-        async def handle_text_message(event: MessageEvent) -> None:
+        def handle_text_message(event: MessageEvent) -> None:
             """Handle text message events."""
-            await self._handle_text_message(event)
+            self._handle_text_message_sync(event)
 
         @self.webhook_handler.add(MessageEvent, message=ImageMessageContent)
-        async def handle_image_message(event: MessageEvent) -> None:
+        def handle_image_message(event: MessageEvent) -> None:
             """Handle image message events."""
-            await self._handle_image_message(event)
+            self._handle_image_message_sync(event)
 
         @self.webhook_handler.add(PostbackEvent)
-        async def handle_postback(event: PostbackEvent) -> None:
+        def handle_postback(event: PostbackEvent) -> None:
             """Handle postback events."""
-            await self._handle_postback(event)
+            self._handle_postback_sync(event)
 
         @self.webhook_handler.add(FollowEvent)
-        async def handle_follow(event: FollowEvent) -> None:
+        def handle_follow(event: FollowEvent) -> None:
             """Handle follow events."""
-            await self._handle_follow(event)
+            self._handle_follow_sync(event)
 
     async def handle_webhook(self, body: str, signature: str) -> None:
         """
         Handle incoming webhook request.
-
-        Args:
-            body: Request body as string
-            signature: X-Line-Signature header value
-
-        Raises:
-            InvalidSignatureError: If signature verification fails
+        Runs the synchronous handler in a separate thread to avoid event loop conflicts.
         """
-        await self.webhook_handler.handle(body, signature)
+        import asyncio
+        import functools
+
+        # Run the synchronous SDK handler in a thread
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, 
+            functools.partial(self.webhook_handler.handle, body, signature)
+        )
 
     def _get_messaging_api(self) -> MessagingApi:
         """Get MessagingApi client."""
