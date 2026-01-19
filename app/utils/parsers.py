@@ -15,7 +15,7 @@ def parse_postback_data(data: str) -> dict[str, str]:
     Parse postback data string into dictionary.
 
     Args:
-        data: Postback data string (e.g., "plant_type=RICE&region=NORTH")
+        data: Postback data string (e.g., "plant_type=RICE&plant_part=LEAF")
 
     Returns:
         Dictionary of parsed key-value pairs

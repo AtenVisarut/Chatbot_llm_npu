@@ -777,28 +777,28 @@ class FlexMessageBuilder:
         return QuickReply(items=items)
 
     @classmethod
-    def create_quick_reply_regions(cls) -> QuickReply:
+    def create_quick_reply_plant_parts(cls) -> QuickReply:
         """
-        Create quick reply buttons for regions.
+        Create quick reply buttons for plant parts.
 
         Returns:
-            QuickReply with region options
+            QuickReply with plant part options
         """
         items = [
             QuickReplyItem(
                 action=PostbackAction(
-                    label=region.value,
-                    data=f"region={region.name}"
+                    label=part.value,
+                    data=f"plant_part={part.name}"
                 )
             )
-            for region in Region
+            for part in PlantPart
         ]
 
         items.append(
             QuickReplyItem(
                 action=PostbackAction(
                     label="ข้าม",
-                    data="region=skip"
+                    data="plant_part=skip"
                 )
             )
         )

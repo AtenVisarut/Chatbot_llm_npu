@@ -26,7 +26,7 @@ from linebot.v3.webhooks import (
 
 from app.config import get_settings
 from app.handlers.message_handler import MessageHandler
-from app.models import ERROR_MESSAGES, PlantType, Region, UserState
+from app.models import ERROR_MESSAGES, PlantPart, PlantType, UserState
 from app.services.session_service import session_service
 from app.services.image_service import ImageValidationError, image_service
 from app.utils.flex_messages import FlexMessageBuilder
@@ -36,7 +36,7 @@ from app.utils.parsers import (
     is_skip_command,
     parse_plant_type,
     parse_postback_data,
-    parse_region,
+    parse_plant_part,
     sanitize_text,
 )
 
@@ -448,7 +448,7 @@ class LineHandler:
         plant_type: PlantType,
         reply_token: str
     ) -> None:
-        """Set plant type and proceed to region selection."""
+        """Set plant type and proceed to plant part selection."""
         user_info = await session_service.get_user_info(user_id)
         user_info.plant_type = plant_type
         await session_service.set_user_info(user_id, user_info)
