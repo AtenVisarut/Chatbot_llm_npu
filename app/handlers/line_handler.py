@@ -141,6 +141,55 @@ class LineHandler:
         self._reply_message(reply_token, [flex_message])
 
 
+    # ==================== Synchronous Event Handlers ====================
+
+    def _handle_text_message_sync(self, event: MessageEvent) -> None:
+        """Handle text message event (sync wrapper)."""
+        import asyncio
+        import threading
+
+        # Create a new event loop for this thread if it doesn't exist
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(self._handle_text_message(event))
+
+    def _handle_image_message_sync(self, event: MessageEvent) -> None:
+        """Handle image message event (sync wrapper)."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(self._handle_image_message(event))
+
+    def _handle_postback_sync(self, event: PostbackEvent) -> None:
+        """Handle postback event (sync wrapper)."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(self._handle_postback(event))
+
+    def _handle_follow_sync(self, event: FollowEvent) -> None:
+        """Handle follow event (sync wrapper)."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(self._handle_follow(event))
+
     # ==================== Async Event Handlers ====================
 
     async def _handle_text_message(self, event: MessageEvent) -> None:
