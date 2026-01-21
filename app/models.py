@@ -57,126 +57,72 @@ class UserState(str, Enum):
     COMPLETED = "completed"
 
 
-class ChemicalControl(BaseModel):
-    """Chemical control recommendation model."""
-    product_name: str = Field(..., description="ชื่อสารเคมี")
-    active_ingredient: str = Field(..., description="สารออกฤทธิ์")
-    dosage: str = Field(..., description="อัตราการใช้")
-    application_method: str = Field(..., description="วิธีใช้")
-    precautions: str = Field(..., description="ข้อควรระวัง")
+class PrimaryIssue(BaseModel):
+    """Primary issue model."""
+    class_en: str = Field(..., description="Class ที่ตรวจพบ (ภาษาอังกฤษ)")
+    description: str = Field(..., description="คำอธิบายลักษณะอาการโดยสรุป (1–2 ประโยค)")
 
 
-class DiseaseCharacteristics(BaseModel):
-    """Disease characteristics model."""
-    appearance: str = Field(..., description="ลักษณะการปรากฏ")
-    occurrence: str = Field(..., description="สาเหตุและสภาวะที่เกิด")
-    spread_pattern: str = Field(..., description="รูปแบบการแพร่กระจาย")
-    severity: Severity = Field(..., description="ระดับความรุนแรง")
+class VisualEvidence(BaseModel):
+    """Structured visual evidence from image."""
+    spots_description: str = Field(..., description="ลักษณะของจุดหรือแผลบนใบ (สี, ขอบเขต, ความคมชัด)")
+    lesion_shape: str = Field(..., description="รูปทรงของแผล (เช่น กลม, รี, รูปตา, ไม่สม่ำเสมอ)")
+    distribution: str = Field(..., description="การกระจายตัวของอาการบนใบ (กระจาย / รวมกลุ่ม / เฉพาะปลายใบ)")
+    severity_observation: str = Field(..., description="ระดับความรุนแรงของอาการบนใบข้าว")
 
 
-class Treatment(BaseModel):
-    """Treatment recommendations model."""
-    immediate_action: list[str] = Field(
-        default_factory=list,
-        description="การดำเนินการเร่งด่วน"
-    )
-    chemical_control: list[ChemicalControl] = Field(
-        default_factory=list,
-        description="วิธีควบคุมด้วยสารเคมี"
-    )
-    organic_control: list[str] = Field(
-        default_factory=list,
-        description="วิธีควบคุมแบบอินทรีย์"
-    )
-    cultural_practices: list[str] = Field(
-        default_factory=list,
-        description="วิธีการจัดการแปลง"
-    )
+class DiseaseManagement(BaseModel):
+    """Disease management recommendations."""
+    cultural_management: list[str] = Field(..., description="การจัดการเชิงเกษตร")
+    cultivar_and_cropping_system: list[str] = Field(..., description="การจัดการด้านพันธุ์และระบบปลูก")
+    monitoring_and_prevention: list[str] = Field(..., description="การเฝ้าระวังและป้องกัน")
+    chemical_management: list[str] = Field(..., description="การจัดการด้วยสารเคมี (หากจำเป็น)")
+
+
+class DiagnosisSummary(BaseModel):
+    """Diagnosis summary model."""
+    final_class: str = Field(..., description="Class สุดท้าย")
+    severity: str = Field(..., description="ระดับความรุนแรง")
+    overall_confidence: str = Field(..., description="ความมั่นใจโดยรวม")
 
 
 class DiagnosisResult(BaseModel):
-    """Complete diagnosis result from Gemini AI."""
-    disease_name_th: str = Field(..., description="ชื่อโรคภาษาไทย")
-    disease_name_en: str = Field(..., description="ชื่อโรคภาษาอังกฤษ")
-    pathogen_type: str = Field(..., description="ประเภทของเชื้อก่อโรค")
-    confidence_level: int = Field(
-        ...,
-        ge=0,
-        le=100,
-        description="ระดับความมั่นใจ (0-100%)"
-    )
-    symptoms_observed: list[str] = Field(
-        default_factory=list,
-        description="อาการที่พบ"
-    )
-    disease_characteristics: DiseaseCharacteristics = Field(
-        ...,
-        description="ลักษณะของโรค"
-    )
-    recommendations: list[str] = Field(
-        default_factory=list,
-        description="คำแนะนำทั่วไป"
-    )
-    prevention_methods: list[str] = Field(
-        default_factory=list,
-        description="วิธีป้องกัน"
-    )
-    treatment: Treatment = Field(..., description="วิธีการรักษา")
-    additional_notes: str | None = Field(
-        default=None,
-        description="ข้อมูลเพิ่มเติม"
-    )
-    followup_needed: bool = Field(
-        default=False,
-        description="ต้องติดตามผลหรือไม่"
-    )
-    expert_consultation: str | None = Field(
-        default=None,
-        description="คำแนะนำในการปรึกษาผู้เชี่ยวชาญ"
-    )
+    """Complete diagnosis result from Gemini AI (Updated v2)."""
+    confidence_level: int = Field(..., ge=0, le=100, description="ระดับความมั่นใจ (XX)")
+    primary_issue: PrimaryIssue = Field(..., description="อาการหลัก")
+    causal_agent: str = Field(..., description="กลุ่มสาเหตุของโรค (Causal Agent)")
+    visual_evidence: VisualEvidence = Field(..., description="หลักฐานทางอาการจากภาพ")
+    diagnostic_reasoning: str = Field(..., description="เหตุผลในการจัดอยู่ใน Class นี้")
+    disease_management: DiseaseManagement = Field(..., description="แนวทางการจัดการโรค")
+    summary: DiagnosisSummary = Field(..., description="สรุปผล")
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "disease_name_th": "โรคไหม้",
-                "disease_name_en": "Rice Blast",
-                "pathogen_type": "เชื้อรา",
                 "confidence_level": 85,
-                "symptoms_observed": [
-                    "จุดสีน้ำตาลรูปตาบนใบ",
-                    "ขอบแผลสีเหลือง"
-                ],
-                "disease_characteristics": {
-                    "appearance": "จุดรูปตาสีน้ำตาล ขอบเหลือง",
-                    "occurrence": "อากาศชื้นสูง อุณหภูมิ 25-28°C",
-                    "spread_pattern": "แพร่ทางลม สปอร์",
-                    "severity": "ปานกลาง"
+                "primary_issue": {
+                    "class_en": "rice_blast",
+                    "description": "พบแผลรูปตาสีน้ำตาลขอบเหลืองกระจายอยู่ทั่วไปบนใบข้าว"
                 },
-                "recommendations": [
-                    "หยุดให้น้ำเพิ่มความชื้น",
-                    "ตัดใบที่เป็นโรคทิ้ง"
-                ],
-                "prevention_methods": [
-                    "ใช้พันธุ์ต้านทาน",
-                    "ไม่ใส่ปุ๋ยไนโตรเจนเกิน"
-                ],
-                "treatment": {
-                    "immediate_action": ["ตัดใบที่เป็นโรค"],
-                    "chemical_control": [
-                        {
-                            "product_name": "ไตรไซคลาโซล",
-                            "active_ingredient": "Tricyclazole 75% WP",
-                            "dosage": "20 กรัม/น้ำ 20 ลิตร",
-                            "application_method": "พ่นทางใบ",
-                            "precautions": "ห้ามพ่นก่อนเก็บเกี่ยว 21 วัน"
-                        }
-                    ],
-                    "organic_control": ["ใช้เชื้อ Trichoderma"],
-                    "cultural_practices": ["ปรับระยะปลูกให้โปร่ง"]
+                "causal_agent": "Fungal disease (Magnaporthe oryzae)",
+                "visual_evidence": {
+                    "spots_description": "แผลแบบจุดหยดน้ำ สีเทากลาง มีขอบสีน้ำตาลเข้ม",
+                    "lesion_shape": "รูปตา หรือรูปข้าวหลามตัด",
+                    "distribution": "กระจายตัวสม่ำเสมอทั่วทั้งใบ",
+                    "severity_observation": "พบแผลลามประมาณ 20-30% ของพื้นที่ใบ"
                 },
-                "additional_notes": "หากอาการรุนแรงควรปรึกษาเกษตรอำเภอ",
-                "followup_needed": True,
-                "expert_consultation": "แนะนำติดต่อศูนย์วิจัยข้าว"
+                "diagnostic_reasoning": "เนื่องจากลักษณะแผลเป็นรูปตาที่ชัดเจนและมีสีเทากลาง ซึ่งเป็นเอกลักษณ์ของ Rice Blast ต่างจาก Brown Spot ที่ปกติแผลจะกลมกว่า",
+                "disease_management": {
+                    "cultural_management": ["ลดการใส่ปุ๋ยไนโตรเจนส่วนเกิน", "งดให้น้ำแบบสปริงเกอร์ในช่วงเย็น"],
+                    "cultivar_and_cropping_system": ["ใช้พันธุ์ต้านทาน เช่น กข57", "เว้นระยะปลูกให้ระบายอากาศดี"],
+                    "monitoring_and_prevention": ["สำรวจแปลงทุก 3 วัน", "เฝ้าระวังเป็นพิเศษในช่วงอากาศชื้น"],
+                    "chemical_management": ["พ่นสารป้องกันกำจัดเชื้อรา เช่น ไซโปรโคนาโซล หรือ อะซอกซีสโตรบิน ตามอัตราแนะนำ"]
+                },
+                "summary": {
+                    "final_class": "rice_blast",
+                    "severity": "ปานกลาง",
+                    "overall_confidence": "85%"
+                }
             }
         }
     }

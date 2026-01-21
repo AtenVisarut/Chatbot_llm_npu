@@ -29,7 +29,7 @@ from app.handlers.message_handler import MessageHandler
 from app.models import ERROR_MESSAGES, PlantPart, PlantType, UserState
 from app.services.session_service import session_service
 from app.services.image_service import ImageValidationError, image_service
-from app.utils.flex_messages import FlexMessageBuilder
+from app.utils.text_messages import TextMessageBuilder
 from app.utils.parsers import (
     is_greeting,
     is_help_request,
@@ -136,10 +136,6 @@ class LineHandler:
         """Send a simple text reply."""
         self._reply_message(reply_token, [TextMessage(text=text)])
 
-    def _reply_flex(self, reply_token: str, flex_message) -> None:
-        """Send a flex message reply."""
-        self._reply_message(reply_token, [flex_message])
-
 
     # ==================== Synchronous Event Handlers ====================
 
@@ -205,39 +201,19 @@ class LineHandler:
 
         logger.info(f"Text message from {user_id}: {text[:50]}...")
 
-        # Check for greeting
-        if is_greeting(text):
-            self._reply_flex(
-                reply_token,
-                FlexMessageBuilder.create_welcome_message()
-            )
-            return
-
-        # Check for help request
-        if is_help_request(text):
-            self._reply_flex(
-                reply_token,
-                FlexMessageBuilder.create_welcome_message()
-            )
-            return
-
-        # Get current user state
-        state = await session_service.get_user_state(user_id)
-
-        if state == UserState.WAITING_FOR_PLANT_TYPE:
-            await self._handle_plant_type_input(
-                user_id, text, reply_token
-            )
-        elif state == UserState.WAITING_FOR_PLANT_PART:
-            await self._handle_plant_part_input(
-                user_id, text, reply_token
-            )
-        else:
-            # Default response - prompt to send image
+        # Check for greeting or help
+        if is_greeting(text) or is_help_request(text):
             self._reply_text(
                 reply_token,
-                "กรุณาส่งรูปภาพพืชที่ต้องการวินิจฉัยโรค 📷"
+                TextMessageBuilder.format_welcome()
             )
+            return
+
+        # Default response - prompt to send image
+        self._reply_text(
+            reply_token,
+            "กรุณาส่งรูปภาพพืชที่ต้องการวินิจฉัยโรค 📷"
+        )
 
     async def _handle_image_message(self, event: MessageEvent) -> None:
         """
@@ -254,11 +230,13 @@ class LineHandler:
 
         try:
             # Check rate limit
-            is_allowed, remaining = await session_service.check_rate_limit(user_id)
+            is_allowed, remaining = await session_service.check_rate_limit(
+                user_id, max_requests=settings.max_requests_per_hour
+            )
             if not is_allowed:
-                self._reply_flex(
+                self._reply_text(
                     reply_token,
-                    FlexMessageBuilder.create_error_message(
+                    TextMessageBuilder.format_error(
                         ERROR_MESSAGES["rate_limit_exceeded"].format(minutes=60)
                     )
                 )
@@ -275,31 +253,32 @@ class LineHandler:
                 user_id, image_data, content_type
             )
 
-            # Update state to waiting for plant type
-            await session_service.set_user_state(
-                user_id, UserState.WAITING_FOR_PLANT_TYPE
+            # Send info request message
+            self._reply_text(
+                reply_token,
+                TextMessageBuilder.format_processing()
             )
 
-            # Send info request message
-            self._reply_flex(
-                reply_token,
-                FlexMessageBuilder.create_info_request_message()
+            # Mark state as processing
+            await session_service.set_user_state(
+                user_id, UserState.PROCESSING
             )
+
+            # Trigger diagnosis immediately
+            await self.message_handler.process_diagnosis(user_id, self)
 
         except ImageValidationError as e:
             logger.warning(f"Image validation failed: {e}")
-            self._reply_flex(
+            self._reply_text(
                 reply_token,
-                FlexMessageBuilder.create_error_message(e.user_message)
+                TextMessageBuilder.format_error(e.user_message)
             )
 
         except Exception as e:
             logger.error(f"Failed to process image: {e}")
-            self._reply_flex(
+            self._reply_text(
                 reply_token,
-                FlexMessageBuilder.create_error_message(
-                    ERROR_MESSAGES["api_error"]
-                )
+                TextMessageBuilder.format_error(ERROR_MESSAGES["api_error"])
             )
 
     async def _handle_postback(self, event: PostbackEvent) -> None:
@@ -315,47 +294,11 @@ class LineHandler:
 
         logger.info(f"Postback from {user_id}: {data}")
 
-        # Handle plant type selection
-        if "plant_type" in data:
-            plant_type_str = data["plant_type"]
-
-            if plant_type_str == "other":
-                await session_service.set_user_state(
-                    user_id, UserState.WAITING_FOR_PLANT_TYPE
-                )
-                self._reply_text(
-                    reply_token,
-                    "กรุณาพิมพ์ชื่อพืชที่ต้องการวินิจฉัย"
-                )
-            else:
-                try:
-                    plant_type = PlantType[plant_type_str]
-                    await self._set_plant_type_and_proceed(
-                        user_id, plant_type, reply_token
-                    )
-                except KeyError:
-                    self._reply_text(
-                        reply_token,
-                        "ไม่รู้จักชนิดพืชนี้ กรุณาเลือกใหม่"
-                    )
-
-        # Handle plant part selection
-        elif "plant_part" in data:
-            plant_part_str = data["plant_part"]
-
-            if plant_part_str == "skip":
-                await self._proceed_to_diagnosis(user_id, reply_token)
-            else:
-                try:
-                    plant_part = PlantPart[plant_part_str]
-                    await self._set_plant_part_and_diagnose(
-                        user_id, plant_part, reply_token
-                    )
-                except KeyError:
-                    await self._proceed_to_diagnosis(user_id, reply_token)
-
+        # Postback handlers for plant type/part are deprecated in direct diagnosis flow.
+        # We keep the function structure for other postbacks like treatment or retry.
+        
         # Handle show treatment
-        elif data.get("show_treatment"):
+        if data.get("show_treatment"):
             await self.message_handler.show_treatment(user_id, reply_token, self)
 
         # Handle show diagnosis
@@ -390,91 +333,13 @@ class LineHandler:
 
         logger.info(f"New follower: {user_id}")
 
-        self._reply_flex(
+        self._reply_text(
             reply_token,
-            FlexMessageBuilder.create_welcome_message()
+            TextMessageBuilder.format_welcome()
         )
 
     # ==================== Helper Methods ====================
 
-    async def _handle_plant_type_input(
-        self,
-        user_id: str,
-        text: str,
-        reply_token: str
-    ) -> None:
-        """Handle plant type text input."""
-        plant_type = parse_plant_type(text)
-
-        if plant_type:
-            await self._set_plant_type_and_proceed(
-                user_id, plant_type, reply_token
-            )
-        else:
-            # Store as other plant type with custom name
-            user_info = await session_service.get_user_info(user_id)
-            user_info.additional_info = f"ชนิดพืช: {text}"
-            await session_service.set_user_info(user_id, user_info)
-
-            # Proceed to plant part selection
-            await session_service.set_user_state(
-                user_id, UserState.WAITING_FOR_PLANT_PART
-            )
-            self._reply_flex(
-                reply_token,
-                FlexMessageBuilder.create_plant_part_request_message()
-            )
-
-    async def _handle_plant_part_input(
-        self,
-        user_id: str,
-        text: str,
-        reply_token: str
-    ) -> None:
-        """Handle plant part text input."""
-        if is_skip_command(text):
-            await self._proceed_to_diagnosis(user_id, reply_token)
-        else:
-            # We don't really have a parser for plant parts, so just treat as additional info
-            user_info = await session_service.get_user_info(user_id)
-            additional = user_info.additional_info or ""
-            user_info.additional_info = f"{additional} จุดที่พบ: {text}".strip()
-            await session_service.set_user_info(user_id, user_info)
-            await self._proceed_to_diagnosis(user_id, reply_token)
-
-    async def _set_plant_type_and_proceed(
-        self,
-        user_id: str,
-        plant_type: PlantType,
-        reply_token: str
-    ) -> None:
-        """Set plant type and proceed to plant part selection."""
-        user_info = await session_service.get_user_info(user_id)
-        user_info.plant_type = plant_type
-        await session_service.set_user_info(user_id, user_info)
-
-        # Move to plant part selection
-        await session_service.set_user_state(
-            user_id, UserState.WAITING_FOR_PLANT_PART
-        )
-
-        self._reply_flex(
-            reply_token,
-            FlexMessageBuilder.create_plant_part_request_message()
-        )
-
-    async def _set_plant_part_and_diagnose(
-        self,
-        user_id: str,
-        plant_part: PlantPart,
-        reply_token: str
-    ) -> None:
-        """Set plant part and start diagnosis."""
-        user_info = await session_service.get_user_info(user_id)
-        user_info.plant_part = plant_part
-        await session_service.set_user_info(user_id, user_info)
-
-        await self._proceed_to_diagnosis(user_id, reply_token)
 
     async def _proceed_to_diagnosis(
         self,
@@ -483,9 +348,9 @@ class LineHandler:
     ) -> None:
         """Start the diagnosis process."""
         # Send processing message
-        self._reply_flex(
+        self._reply_text(
             reply_token,
-            FlexMessageBuilder.create_processing_message()
+            TextMessageBuilder.format_processing()
         )
 
         # Update state

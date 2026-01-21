@@ -29,8 +29,18 @@ class Settings(BaseSettings):
         description="Google Gemini API Key for vision analysis"
     )
     gemini_model: str = Field(
-        default="gemini-2.0-flash",
-        description="Gemini model to use for analysis"
+        default="gemini-2.0-flash-lite",
+        description="Primary Gemini model to use"
+    )
+    gemini_fallback_models: list[str] = Field(
+        default=[
+            "gemini-2.0-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
+        ],
+        description="List of models to try in order if the primary one fails"
     )
 
     # Application Configuration
@@ -69,7 +79,7 @@ class Settings(BaseSettings):
 
     # Rate Limiting Configuration
     max_requests_per_hour: int = Field(
-        default=10,
+        default=30,
         description="Maximum diagnosis requests per user per hour"
     )
 
@@ -139,78 +149,58 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# Gemini System Instruction for plant disease diagnosis
+# Gemini System Instruction for specialized rice disease diagnosis
 GEMINI_SYSTEM_INSTRUCTION = """
-คุณเป็นผู้เชี่ยวชาญด้านโรคพืชเฉพาะทางในประเทศไทย มีความเชี่ยวชาญด้านข้าวเป็นพิเศษ
+คุณคือผู้เชี่ยวชาญด้านโรคพืชและระบบวินิจฉัยโรคด้วยภาพ
+(Plant Pathology AI Expert & Vision-based Crop Diagnosis System)
 
-## ความสามารถหลัก:
-- วิเคราะห์โรคพืชจากภาพถ่ายด้วยความแม่นยำสูง (>85%)
-- มีความรู้โรคข้าว 50+ ชนิด ในประเทศไทย
-- เข้าใจบริบทการเกษตรไทย (ภูมิอากาศ ฤดูกาล ภูมิภาค)
-- แนะนำวิธีป้องกัน/รักษาที่เหมาะสมและปฏิบัติได้จริง
+ภารกิจของคุณคือ:
+วิเคราะห์ภาพใบข้าวที่ผู้ใช้ส่งมา และวินิจฉัยอาการของพืช
+โดยจำกัดผลลัพธ์อยู่ใน 4 class เท่านั้น ได้แก่
 
-## หลักการวินิจฉัย:
-1. **สังเกตอาการ**: สี ลวดลาย ตำแหน่ง ขนาดของจุดโรค
-2. **พิจารณาบริบท**: ชนิดพืช จุดที่พบอาการ (ใบ/ลำต้น/ราก) ฤดูกาล อายุพืช
-3. **วิเคราะห์สาเหตุ**: เชื้อรา ไวรัส แบคทีเรีย แมลง สารอาหาร
-4. **ประเมินความรุนแรง**: เล็กน้อย ปานกลาง รุนแรง
-5. **ความมั่นใจ**:
-   - 90-100%: มั่นใจสูง อาการชัดเจน
-   - 70-89%: มั่นใจปานกลาง อาการคลาสสิก
-   - 50-69%: ต้องสังเกตเพิ่ม อาการคล้ายหลายโรค
-   - <50%: ไม่แน่ใจ ควรปรึกษาผู้เชี่ยวชาญ
+1. healthy
+2. rice_tungro
+3. rice_blast
+4. brown_spot
 
-## ความรู้เฉพาะทาง - โรคข้าวสำคัญ:
-1. **โรคไหม้** (Blast): จุดสีน้ำตาลรูปตา ขอบสีเหลือง
-2. **โรคเหี่ยวเขียว**: ใบเหลือง ลำต้นเน่า กลิ่นเหม็น
-3. **โรคใบจุดสีน้ำตาล**: จุดเล็กสีน้ำตาล กระจายทั่วใบ
-4. **โรคขอบใบแห้ง**: ขอบใบเหลือง แห้ง เริ่มปลายใบ
-5. **โภชนาการขาด**: เหลือง ม่วง แคระแกร็น
+❗ ห้ามวินิจฉัยโรคอื่นนอกเหนือจาก 4 class นี้
+❗ หากอาการไม่ชัดเจน ให้เลือก class ที่ใกล้เคียงที่สุด
+   พร้อมระบุระดับความไม่แน่ใจอย่างชัดเจน
 
-## การตอบ:
-- **ตอบเป็น JSON เท่านั้น** ไม่มี markdown หรือข้อความอื่น
-- ใช้ภาษาไทยที่เกษตรกรเข้าใจง่าย หลีกเลี่ยงศัพท์เทคนิค
-- แนะนำสารเคมีที่จดทะเบียนในไทย (กรมวิชาการเกษตร)
-- **ให้ทางเลือกอินทรีย์ด้วยเสมอ** เพื่อสิ่งแวดล้อม
-- เน้นความปลอดภัย: ระยะห่างการเก็บเกี่ยว (PHI)
+---
 
-## ข้อห้ามสำคัญ:
-- ❌ ห้ามแนะนำสารเคมีที่ไม่ได้รับอนุญาต
-- ❌ ห้ามให้คำมั่นว่ารักษาหายแน่นอน
-- ❌ ห้ามวินิจฉัยเกินข้อมูลที่มี
-- ❌ ห้ามแนะนำใช้สารเกินอัตรา
+## รูปแบบผลลัพธ์ที่ต้องการ
+❗ ต้องใช้โครงสร้างและหัวข้อต่อไปนี้เท่านั้น
+❗ ห้ามเพิ่มหรือลดหัวข้อ
+
+## JSON Output Structure:
+{JSON_SCHEMA}
 """
 
-# JSON Schema for diagnosis output
+# JSON Schema for diagnosis output (Updated for prompt.txt v2)
 DIAGNOSIS_JSON_SCHEMA = {
-    "disease_name_th": "ชื่อโรคภาษาไทย",
-    "disease_name_en": "Disease Name in English",
-    "pathogen_type": "เชื้อรา|ไวรัส|แบคทีเรีย|ศัตรูพืช|ปัญหาสารอาหาร",
     "confidence_level": 85,
-    "symptoms_observed": ["อาการที่พบ 1", "อาการที่พบ 2"],
-    "disease_characteristics": {
-        "appearance": "ลักษณะการปรากฏ",
-        "occurrence": "สาเหตุและสภาวะที่เกิด",
-        "spread_pattern": "รูปแบบการแพร่กระจาย",
-        "severity": "เล็กน้อย|ปานกลาง|รุนแรง"
+    "primary_issue": {
+      "class_en": "rice_blast",
+      "description": "คำอธิบายลักษณะอาการโดยสรุป (1–2 ประโยค)"
     },
-    "recommendations": ["คำแนะนำ 1", "คำแนะนำ 2"],
-    "prevention_methods": ["วิธีป้องกัน 1", "วิธีป้องกัน 2"],
-    "treatment": {
-        "immediate_action": ["การดำเนินการเร่งด่วน"],
-        "chemical_control": [
-            {
-                "product_name": "ชื่อสาร",
-                "active_ingredient": "สารออกฤทธิ์",
-                "dosage": "อัตราการใช้",
-                "application_method": "วิธีใช้",
-                "precautions": "ข้อควรระวัง"
-            }
-        ],
-        "organic_control": ["วิธีอินทรีย์"],
-        "cultural_practices": ["วิธีการจัดการแปลงนา"]
+    "causal_agent": "Fungal disease (Magnaporthe oryzae)",
+    "visual_evidence": {
+      "spots_description": "สี, ขอบเขต, ความคมชัด",
+      "lesion_shape": "กลม, รี, รูปตา, ไม่สม่ำเสมอ",
+      "distribution": "กระจาย / รวมกลุ่ม / เฉพาะปลายใบ",
+      "severity_observation": "ระดับความรุนแรงของอาการบนใบข้าว"
     },
-    "additional_notes": "ข้อมูลเพิ่มเติม",
-    "followup_needed": True,
-    "expert_consultation": "แนะนำปรึกษาผู้เชี่ยวชาญ"
+    "diagnostic_reasoning": "อธิบายเหตุผลเชิงวิเคราะห์ว่าทำไมอาการในภาพจึงสอดคล้องกับ class นี้มากที่สุด พร้อมเปรียบเทียบกับ class อื่นแบบสั้น ๆ",
+    "disease_management": {
+      "cultural_management": ["การจัดการแปลงนา", "ความหนาแน่นของต้น", "การจัดการน้ำ", "การลดแหล่งสะสมของโรค"],
+      "cultivar_and_cropping_system": ["ความเหมาะสมของพันธุ์", "การเลือกพันธุ์ต้านทาน", "ระบบปลูกที่ช่วยลดความเสี่ยงของโรค"],
+      "monitoring_and_prevention": ["แนวทางการติดตามอาการ", "ช่วงเวลาที่ควรเฝ้าระวังเป็นพิเศษ", "ความเสี่ยงในการระบาดซ้ำ"],
+      "chemical_management": ["พ่นสารป้องกันกำจัดโรคพืชตามอัตราแนะนำ (ถ้าจำเป็น)"]
+    },
+    "summary": {
+      "final_class": "rice_blast",
+      "severity": "ต่ำ | ปานกลาง | รุนแรง",
+      "overall_confidence": "85%"
+    }
 }

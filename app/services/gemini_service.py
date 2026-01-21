@@ -12,6 +12,7 @@ from typing import Any
 
 import google.generativeai as genai
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
+from google.api_core import exceptions as google_exceptions
 
 from app.config import DIAGNOSIS_JSON_SCHEMA, GEMINI_SYSTEM_INSTRUCTION, get_settings
 from app.models import DiagnosisResult, ERROR_MESSAGES, PlantPart, PlantType
@@ -52,7 +53,7 @@ class GeminiService:
             model_name: Gemini model to use
         """
         self.api_key = api_key or settings.gemini_api_key
-        self.model_name = model_name or settings.gemini_model
+        self.fallback_models = settings.gemini_fallback_models
         self.max_retries = settings.api_max_retries
         self.retry_delay = settings.api_retry_delay
 
@@ -79,17 +80,14 @@ class GeminiService:
         # Initialize model
         self._model = None
 
-    @property
-    def model(self):
-        """Get or create Gemini model instance."""
-        if self._model is None:
-            self._model = genai.GenerativeModel(
-                model_name=self.model_name,
-                generation_config=self.generation_config,
-                safety_settings=self.safety_settings,
-                system_instruction=self._build_system_instruction()
-            )
-        return self._model
+    def _get_model(self, model_name: str):
+        """Create a Gemini model instance for a specific model name."""
+        return genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=self.generation_config,
+            safety_settings=self.safety_settings,
+            system_instruction=self._build_system_instruction()
+        )
 
     def _build_system_instruction(self) -> str:
         """Build the system instruction with JSON schema."""
@@ -98,7 +96,7 @@ class GeminiService:
 
     def _build_prompt(
         self,
-        plant_type: PlantType,
+        plant_type: PlantType | None = None,
         plant_part: PlantPart | None = None,
         additional_info: str | None = None
     ) -> str:
@@ -106,17 +104,19 @@ class GeminiService:
         Build diagnosis prompt.
 
         Args:
-            plant_type: Type of plant
-            plant_part: Affected plant part
-            additional_info: Additional information from user
+            plant_type: Type of plant (optional)
+            plant_part: Affected plant part (optional)
+            additional_info: Additional information from user (optional)
 
         Returns:
             Formatted prompt string
         """
-        prompt_parts = [
-            f"วิเคราะห์โรคพืชจากภาพนี้",
-            f"ชนิดพืช: {plant_type.value}",
-        ]
+        prompt_parts = ["วิเคราะห์โรคพืชจากภาพนี้"]
+
+        if plant_type:
+            prompt_parts.append(f"ชนิดพืช: {plant_type.value}")
+        else:
+            prompt_parts.append("ระบุชนิดพืชจากภาพหากเป็นไปได้")
 
         if plant_part:
             prompt_parts.append(f"จุดที่พบอาการ: {plant_part.value}")
@@ -195,7 +195,7 @@ class GeminiService:
     async def diagnose(
         self,
         image_data: bytes,
-        plant_type: PlantType,
+        plant_type: PlantType | None = None,
         content_type: str = "image/jpeg",
         plant_part: PlantPart | None = None,
         additional_info: str | None = None
@@ -221,59 +221,92 @@ class GeminiService:
 
         last_error = None
 
-        for attempt in range(self.max_retries):
-            try:
-                logger.info(f"Diagnosis attempt {attempt + 1}/{self.max_retries}")
+        # Try each model in the fallback list
+        for model_name in self.fallback_models:
+            for attempt in range(self.max_retries):
+                try:
+                    logger.info(
+                        f"Diagnosis attempt {attempt + 1}/{self.max_retries} "
+                        f"using model: {model_name}"
+                    )
 
-                # Call Gemini API
-                response = await asyncio.to_thread(
-                    self.model.generate_content,
-                    [prompt, image_content]
-                )
+                    # Initialize model on demand
+                    model = self._get_model(model_name)
 
-                if not response.text:
-                    raise GeminiAPIError(
-                        "Empty response from Gemini",
+                    # Call Gemini API
+                    response = await asyncio.to_thread(
+                        model.generate_content,
+                        [prompt, image_content]
+                    )
+
+                    if not response.text:
+                        raise GeminiAPIError(
+                            "Empty response from Gemini",
+                            ERROR_MESSAGES["api_error"],
+                            retryable=True
+                        )
+
+                    # Parse response
+                    result = self._parse_response(response.text)
+
+                    logger.info(
+                        f"Diagnosis successful with {model_name}: "
+                        f"{result.summary.final_class} ({result.confidence_level}%)"
+                    )
+
+                    return result
+
+                except (google_exceptions.ResourceExhausted, google_exceptions.ServiceUnavailable) as e:
+                    logger.warning(f"Rate limit or service error with {model_name}: {e}")
+                    last_error = GeminiAPIError(
+                        f"API Rate Limit or Service error: {e}",
+                        ERROR_MESSAGES["api_error"],
+                        retryable=True
+                    )
+                    # If it's a rate limit, don't just retry the same model, move to next model sooner
+                    if isinstance(e, google_exceptions.ResourceExhausted):
+                        logger.info(f"Rate limit reached for {model_name}, switching model...")
+                        break # Break out of attempt loop to try next model
+
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_delay * (2 ** attempt)
+                        await asyncio.sleep(delay)
+                    else:
+                        break
+
+                except GeminiAPIError as e:
+                    last_error = e
+                    if not e.retryable:
+                        logger.error(f"Non-retryable error with {model_name}: {e}")
+                        break  # Try next model
+
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_delay * (2 ** attempt)
+                        logger.warning(
+                            f"Retrying {model_name} in {delay}s due to: {e}"
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.warning(f"Model {model_name} failed after {self.max_retries} attempts.")
+
+                except Exception as e:
+                    logger.error(f"Unexpected error with {model_name}: {e}")
+                    last_error = GeminiAPIError(
+                        str(e),
                         ERROR_MESSAGES["api_error"],
                         retryable=True
                     )
 
-                # Parse response
-                result = self._parse_response(response.text)
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_delay * (2 ** attempt)
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.warning(f"Model {model_name} failed due to unexpected error.")
 
-                logger.info(
-                    f"Diagnosis successful: {result.disease_name_th} "
-                    f"({result.confidence_level}%)"
-                )
-
-                return result
-
-            except GeminiAPIError as e:
-                last_error = e
-                if not e.retryable:
-                    raise
-
-                if attempt < self.max_retries - 1:
-                    delay = self.retry_delay * (2 ** attempt)
-                    logger.warning(
-                        f"Retrying in {delay}s due to: {e}"
-                    )
-                    await asyncio.sleep(delay)
-
-            except Exception as e:
-                logger.error(f"Unexpected error: {e}")
-                last_error = GeminiAPIError(
-                    str(e),
-                    ERROR_MESSAGES["api_error"],
-                    retryable=True
-                )
-
-                if attempt < self.max_retries - 1:
-                    delay = self.retry_delay * (2 ** attempt)
-                    await asyncio.sleep(delay)
+            logger.info(f"Switching to next fallback model if available...")
 
         raise last_error or GeminiAPIError(
-            "Max retries exceeded",
+            "All fallback models failed",
             ERROR_MESSAGES["api_error"],
             retryable=False
         )
@@ -307,8 +340,9 @@ class GeminiService:
         image_content = self._prepare_image_content(image_data, content_type)
 
         try:
+            model = self._get_model(self.fallback_models[0])
             response = await asyncio.to_thread(
-                self.model.generate_content,
+                model.generate_content,
                 [prompt, image_content]
             )
 
@@ -340,9 +374,8 @@ class GeminiService:
             # List available models as a health check
             models = await asyncio.to_thread(genai.list_models)
             model_names = [m.name for m in models]
-            return f"models/{self.model_name}" in model_names or any(
-                self.model_name in name for name in model_names
-            )
+            primary_model = self.fallback_models[0]
+            return any(primary_model in name for name in model_names)
         except Exception as e:
             logger.error(f"Gemini health check failed: {e}")
             return False

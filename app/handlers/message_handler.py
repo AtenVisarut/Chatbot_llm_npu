@@ -18,7 +18,7 @@ from app.config import get_settings
 from app.models import DiagnosisResult, ERROR_MESSAGES, PlantType, UserState
 from app.services.session_service import session_service
 from app.services.gemini_service import GeminiAPIError, gemini_service
-from app.utils.flex_messages import FlexMessageBuilder
+from app.utils.text_messages import TextMessageBuilder
 
 if TYPE_CHECKING:
     from app.handlers.line_handler import LineHandler
@@ -73,10 +73,6 @@ class MessageHandler:
         """Send a simple text push message."""
         self._push_message(user_id, [TextMessage(text=text)])
 
-    def _push_flex(self, user_id: str, flex_message) -> None:
-        """Send a flex push message."""
-        self._push_message(user_id, [flex_message])
-
     async def process_diagnosis(
         self,
         user_id: str,
@@ -95,23 +91,18 @@ class MessageHandler:
             user_info = await session_service.get_user_info(user_id)
 
             if not image_data:
-                self._push_flex(
+                self._push_text(
                     user_id,
-                    FlexMessageBuilder.create_error_message(
-                        ERROR_MESSAGES["session_expired"]
-                    )
+                    TextMessageBuilder.format_error(ERROR_MESSAGES["session_expired"])
                 )
                 await session_service.clear_user_session(user_id)
                 return
-
-            # Get plant type (default to rice if not specified)
-            plant_type = user_info.plant_type or PlantType.RICE
 
             # Call Gemini for diagnosis
             logger.info(f"Running Gemini diagnosis for user {user_id}")
             result = await gemini_service.diagnose(
                 image_data=image_data,
-                plant_type=plant_type,
+                plant_type=user_info.plant_type,
                 content_type=content_type or "image/jpeg",
                 plant_part=user_info.plant_part,
                 additional_info=user_info.additional_info
@@ -125,37 +116,31 @@ class MessageHandler:
 
             # Check confidence level
             if result.confidence_level < 50:
-                self._push_flex(
+                self._push_text(
                     user_id,
-                    FlexMessageBuilder.create_error_message(
-                        ERROR_MESSAGES["low_confidence"]
-                    )
+                    TextMessageBuilder.format_error(ERROR_MESSAGES["low_confidence"])
                 )
             else:
-                # Send diagnosis result
-                self._push_flex(
-                    user_id,
-                    FlexMessageBuilder.create_diagnosis_result_message(result)
-                )
+                # Send diagnosis and treatment as one text message
+                diagnosis_text = TextMessageBuilder.format_diagnosis_result(result)
+                self._push_text(user_id, diagnosis_text)
 
             # Update state
             await session_service.set_user_state(user_id, UserState.COMPLETED)
 
         except GeminiAPIError as e:
             logger.error(f"Gemini API error for user {user_id}: {e}")
-            self._push_flex(
+            self._push_text(
                 user_id,
-                FlexMessageBuilder.create_error_message(e.user_message)
+                TextMessageBuilder.format_error(e.user_message)
             )
             await session_service.set_user_state(user_id, UserState.IDLE)
 
         except Exception as e:
             logger.error(f"Diagnosis failed for user {user_id}: {e}")
-            self._push_flex(
+            self._push_text(
                 user_id,
-                FlexMessageBuilder.create_error_message(
-                    ERROR_MESSAGES["api_error"]
-                )
+                TextMessageBuilder.format_error(ERROR_MESSAGES["api_error"])
             )
             await session_service.set_user_state(user_id, UserState.IDLE)
 
@@ -167,18 +152,13 @@ class MessageHandler:
     ) -> None:
         """
         Show treatment details for last diagnosis.
-
-        Args:
-            user_id: LINE user ID
-            reply_token: LINE reply token
-            line_handler: LINE handler for sending messages
         """
         result = self._last_results.get(user_id)
 
         if result:
-            line_handler._reply_flex(
+            line_handler._reply_text(
                 reply_token,
-                FlexMessageBuilder.create_treatment_message(result)
+                TextMessageBuilder.format_diagnosis_result(result)
             )
         else:
             line_handler._reply_text(
@@ -194,18 +174,13 @@ class MessageHandler:
     ) -> None:
         """
         Show diagnosis result again.
-
-        Args:
-            user_id: LINE user ID
-            reply_token: LINE reply token
-            line_handler: LINE handler for sending messages
         """
         result = self._last_results.get(user_id)
 
         if result:
-            line_handler._reply_flex(
+            line_handler._reply_text(
                 reply_token,
-                FlexMessageBuilder.create_diagnosis_result_message(result)
+                TextMessageBuilder.format_diagnosis_result(result)
             )
         else:
             line_handler._reply_text(
